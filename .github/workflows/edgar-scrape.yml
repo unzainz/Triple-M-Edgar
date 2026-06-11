@@ -1,0 +1,26 @@
+name: EDGAR Form D scrape
+
+on:
+  schedule:
+    - cron: "0 13 * * 1"   # Mondays 13:00 UTC = 6am Pacific (PDT)
+  workflow_dispatch: {}     # adds a manual "Run workflow" button
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run EDGAR scraper
+        env:
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+        run: python scrape_edgar.py
