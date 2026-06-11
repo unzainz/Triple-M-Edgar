@@ -123,7 +123,7 @@ def main():
 
     for st in STATES:
         params = {
-            "q": '"multifamily" OR "apartments"',
+            "q": '"multifamily" OR "apartments" OR "Residential"',
             "forms": "D",
             "locationCodes": st,
             "startdt": start.isoformat(),
@@ -133,6 +133,12 @@ def main():
             "https://efts.sec.gov/LATEST/search-index",
             params=params, headers=HEADERS, timeout=60,
         )
+        if r.status_code != 200:
+            time.sleep(2)  # transient SEC 500s — retry once
+            r = requests.get(
+                "https://efts.sec.gov/LATEST/search-index",
+                params=params, headers=HEADERS, timeout=60,
+            )
         if r.status_code != 200:
             print(f"{st}: HTTP {r.status_code}")
             blocked_states += 1
@@ -149,18 +155,24 @@ def main():
             if not name_key or name_key in existing or disp.lower() in existing:
                 continue
 
-            cik = src.get("entity_id", "")
+            cik = (src.get("ciks") or [""])[0] or src.get("entity_id", "")
+            if not cik:
+                m = re.search(r"\(CIK (\d+)\)", disp)
+                cik = m.group(1) if m else ""
             accession = (h.get("_id", "")).split(":")[0]
             if not cik or not accession:
+                print(f"  skip (no CIK/accession): {disp}")
                 continue
 
             time.sleep(0.3)  # be polite to SEC
             det = fetch_detail(cik, accession)
             if not det or not det["name"]:
+                print(f"  skip (no detail): {disp}")
                 continue
 
             amt = float(re.sub(r"[^\d.]", "", det["offering"]) or 0)
             if amt and amt < MIN_OFFERING:
+                print(f"  skip (under $5M: ${amt:,.0f}): {det['name']}")
                 continue
 
             devish = bool(re.search(
